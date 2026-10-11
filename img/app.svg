@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>Slink Uploader</title>
+  <!-- image frame -->
+  <rect x="6" y="6" width="46" height="46" rx="9" fill="#0082c9"/>
+  <clipPath id="frame">
+    <rect x="6" y="6" width="46" height="46" rx="9"/>
+  </clipPath>
+  <g clip-path="url(#frame)">
+    <circle cx="38" cy="20" r="5.5" fill="#fff"/>
+    <path d="M6 52 L20 33 L31 46 L39 37 L52 52 Z" fill="#fff"/>
+  </g>
+  <!-- upload badge -->
+  <circle cx="48" cy="48" r="15" fill="#fff"/>
+  <circle cx="48" cy="48" r="12" fill="#0082c9"/>
+  <path d="M48 40 L55.5 47.5 L51 47.5 L51 56.5 L45 56.5 L45 47.5 L40.5 47.5 Z" fill="#fff"/>
+</svg>
