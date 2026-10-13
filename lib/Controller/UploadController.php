@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\SlinkUploader\Controller;
 
 use OCA\SlinkUploader\Service\CommentService;
+use OCA\SlinkUploader\Service\ImageService;
 use OCA\SlinkUploader\Service\MenuService;
 use OCA\SlinkUploader\Service\SlinkDuplicateException;
 use OCA\SlinkUploader\Service\SlinkService;
@@ -27,6 +28,7 @@ class UploadController extends Controller {
 		private SlinkService $slinkService,
 		private CommentService $commentService,
 		private MenuService $menuService,
+		private ImageService $imageService,
 		private IL10N $l10n,
 		private LoggerInterface $logger,
 	) {
@@ -81,13 +83,24 @@ class UploadController extends Controller {
 			], 400);
 		}
 
+		// The entry's upload processing options (max width, JPEG
+		// conversion, JPEG quality) are looked up server-side by entry
+		// name, so they cannot be altered from the client. ImageService
+		// never touches the original file; on any processing problem it
+		// returns null and the original is uploaded instead (failsafe).
+		$processed = null;
+		$entry = $this->menuService->findEntry($name);
+		if ($entry !== null && ($entry['maxWidth'] > 0 || $entry['toJpg'])) {
+			$processed = $this->imageService->process($node, $entry['maxWidth'], $entry['toJpg'], $entry['quality'] ?? 0);
+		}
+
 		// Slink rejects re-uploads of an unchanged image as duplicates
 		// instead of returning the existing image's URL. The base URL is
 		// already known from a previous upload of this file (stored in
 		// its comment), so reuse it instead of failing the request.
 		$duplicate = false;
 		try {
-			$url = $this->slinkService->upload($node);
+			$url = $this->slinkService->upload($node, $processed);
 		} catch (SlinkDuplicateException $e) {
 			$baseUrl = $this->commentService->findBaseUrl($userId, $fileId);
 			if ($baseUrl === null) {

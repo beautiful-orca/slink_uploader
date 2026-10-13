@@ -10,18 +10,28 @@ admin-configurable.
 
 ## What happens on click
 
-1. The image is sent server-side (in the context of the logged-in user) to
+1. The image is processed server-side according to the chosen
+   context-menu entry: if the entry sets a maximum width, larger images
+   are scaled down proportionally; if the entry enables JPEG conversion,
+   the image is converted to JPEG with the entry's quality in percent
+   (default 85; transparent areas filled white). Processing uses PHP GD,
+   happens only in memory and never touches the original file in
+   Nextcloud — only the Slink upload uses the processed copy. Failsafe:
+   if GD is unavailable or processing fails for any reason (unsupported
+   format, broken image, memory limit), the original is uploaded
+   instead; processing never aborts the upload.
+2. The image is sent server-side (in the context of the logged-in user) to
    the configured Slink API: a multipart POST with the values stored in the
    administration settings (endpoint, file form name, Origin header, Bearer
    token). The URL parameters of the chosen context-menu entry are appended
    to the returned share URL.
-2. The returned share URL is
+3. The returned share URL is
    - copied to the **clipboard** (with a toast confirmation) and
    - stored as a **comment** on the file. Each context-menu entry keeps its
      own comment of the form `Slink - <entry name>: <URL>`. Re-uploading
      through an entry updates that entry's comment; the comments of other
      entries are left untouched.
-3. Slink deduplicates images. When an unchanged image is re-uploaded (e.g.
+4. Slink deduplicates images. When an unchanged image is re-uploaded (e.g.
    a second entry used on the same file), Slink rejects the upload with
    `DuplicateImageException` (HTTP 400) instead of returning the existing
    image's URL. The app handles this transparently: it reuses the base
@@ -31,7 +41,7 @@ admin-configurable.
    image was reused. Only if no URL of the file is known (e.g. the
    duplicate was uploaded outside this app), the request fails with a
    clear "duplicate" error.
-4. All of this happens without WebDAV detours and without shell access — so
+5. All of this happens without WebDAV detours and without shell access — so
    it also works on managed instances (e.g. Hetzner Storage Share;
    installation there via AppDrop, see "Installation").
 
@@ -116,16 +126,19 @@ entries can be added and removed at any time:
 |----------------|--------------------------------------------------------------------------|
 | Name           | Displayed name of the context-menu action, e.g. "Title image"           |
 | URL parameters | Query parameters appended to the share URL, e.g. `width=1200&format=jpeg` |
+| Max. width (px)| Maximum image width for the upload; larger images are scaled down proportionally. `0` = original size |
+| Zu JPG konvertieren | Converts the image to JPEG before the upload (file extension `.jpg`) |
+| JPG-Qualität (%) | JPEG quality in percent for the conversion; `0` or empty = default 85 |
 
 Example configuration:
 
-| Name          | URL parameters            |
-|---------------|---------------------------|
-| Title image   | `width=1200&format=jpeg`  |
-| Article image | `width=560&format=jpeg`   |
+| Name          | URL parameters            | Max. width (px) | Zu JPG konvertieren | JPG-Qualität (%) |
+|---------------|---------------------------|-----------------|---------------------|------------------|
+| Title image   | `width=1200&format=jpeg`  | 1200            | yes                 | 85               |
+| Article image | `width=560&format=jpeg`   | 560             | yes                 | 80               |
 
-Each entry creates its own action in the context menu. On click, the file is
-uploaded and the parameters are appended to the returned URL — with `?` if
+Each entry creates its own action in the context menu. On click, the file
+is uploaded and the parameters are appended to the returned URL — with `?` if
 the URL does not yet have a query part, otherwise with `&`:
 
 ```
@@ -134,17 +147,36 @@ https://img.example.com/image-id.jpg?width=1200&format=jpeg
 
 Notes:
 
+- Width limiting and JPEG conversion are applied server-side **before**
+  the upload, so they work independently of Slink's URL parameters.
+  The JPEG quality is configurable per entry (0/empty = 85). The
+  processing options are read from the server-side entry
+  configuration via the entry name — they cannot be altered from the
+  client.
+- The original file in Nextcloud is never modified; the processed copy
+  only exists in memory for the upload request.
+- Failsafe: if PHP GD is unavailable or the image cannot be processed
+  (unsupported format, broken image, memory limit), the untouched
+  original is uploaded instead and the request never fails because of
+  the processing.
+- Entries stored by app versions before 0.3.0 keep working; they behave
+  as if "Max. width" were `0`, "Zu JPG konvertieren" unchecked and
+  "JPG-Qualität" `0`.
 - If no entry is configured, the app shows a single default action
-  "Upload to Slink" without parameters.
+  "Upload to Slink" without parameters (and without processing).
 - A leading `?` or `&` in the parameters is removed automatically.
-- Allowed characters are letters, digits, and `= & % . _ ~ : - , /`; other
-  characters are rejected on save.
+- Allowed characters for the parameters are letters, digits, and
+  `= & % . _ ~ : - , /`; other characters are rejected on save. The
+  maximum width must be between 0 and 20000; the JPEG quality between 0
+  (default) and 100.
 - Unchanged re-uploads of an image are rejected by Slink as duplicates and
-  handled transparently (see "What happens on click").
+  handled transparently (see "What happens on click"). A resized or
+  converted copy counts as a new image, so different processing options
+  of one file can coexist on Slink.
 - The entries are fetched from the server when the Files app loads
   (`GET /apps/slink_uploader/entries`); changes take effect after the next
   page reload. If fetching fails, the app registers the default action
-  after a short delay so uploads remain possible.
+  after a short delay so uploads remain possible (without processing).
 
 ## Installation
 
@@ -192,6 +224,11 @@ sudo docker exec --user www-data nextcloud-aio-nextcloud php occ slink_uploader:
   (Map + registry event, @nextcloud/files v4). The script is loaded as an
   init script (`Util::addInitScript`) so the registration happens early
   enough in the bootstrap flow.
+- **Image processing:** Width limiting and JPEG conversion use the PHP
+  GD extension (`lib/Service/ImageService.php`). Processing runs in
+  memory only; the processed copy is passed to the upload and then
+  discarded. Without GD, or whenever processing fails, the original is
+  uploaded (failsafe, logged in the Nextcloud log).
 - **Comments:** Uses the Comments API (object type `files`); the marker
   prefix `Slink - ` enables the find-or-update behaviour, with one
   comment per context-menu entry.

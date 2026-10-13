@@ -6,14 +6,22 @@
 (function () {
 	'use strict';
 
-	function addEntryRow(entriesBody, name, params) {
+	function addEntryRow(entriesBody, name, params, maxWidth, toJpg, quality) {
 		var tr = document.createElement('tr');
 		tr.className = 'slink-entry-row';
 		tr.innerHTML = '<td><input type="text" class="entry-name" autocomplete="off" /></td>'
 			+ '<td><input type="text" class="entry-params" autocomplete="off" style="min-width: 220px;" /></td>'
+			+ '<td><input type="number" class="entry-max-width" autocomplete="off" min="0" max="20000" step="1" placeholder="0" style="width: 110px;" /></td>'
+			+ '<td><input type="checkbox" class="entry-to-jpg" /></td>'
+			+ '<td><input type="number" class="entry-jpg-quality" autocomplete="off" min="0" max="100" step="1" placeholder="85" style="width: 90px;" /></td>'
 			+ '<td><button type="button" class="slink-remove-entry button"></button></td>';
 		tr.querySelector('.entry-name').value = name;
 		tr.querySelector('.entry-params').value = params;
+		tr.querySelector('.entry-max-width').value = (typeof maxWidth === 'number' && maxWidth > 0) ? maxWidth : '';
+		tr.querySelector('.entry-to-jpg').checked = !!toJpg;
+		tr.querySelector('.entry-to-jpg').title =
+			(typeof t === 'function') ? t('slink_uploader', 'Converts the image to JPG before the upload') : 'Converts the image to JPG before the upload';
+		tr.querySelector('.entry-jpg-quality').value = (typeof quality === 'number' && quality > 0) ? quality : '';
 		tr.querySelector('.slink-remove-entry').textContent =
 			(typeof t === 'function') ? t('slink_uploader', 'Remove') : 'Remove';
 		entriesBody.appendChild(tr);
@@ -26,7 +34,21 @@
 			var name = rows[i].querySelector('.entry-name').value.trim();
 			var params = rows[i].querySelector('.entry-params').value.trim().replace(/^[?&]+/, '');
 			if (name !== '') {
-				entries.push({ name: name, params: params });
+				var maxWidth = parseInt(rows[i].querySelector('.entry-max-width').value, 10);
+				if (isNaN(maxWidth) || maxWidth < 0) {
+					maxWidth = 0;
+				}
+				var quality = parseInt(rows[i].querySelector('.entry-jpg-quality').value, 10);
+				if (isNaN(quality) || quality < 0) {
+					quality = 0;
+				}
+				entries.push({
+					name: name,
+					params: params,
+					maxWidth: maxWidth,
+					toJpg: rows[i].querySelector('.entry-to-jpg').checked,
+					quality: quality
+				});
 			}
 		}
 		document.getElementById('slink-menu-entries').value = JSON.stringify(entries);
@@ -43,7 +65,7 @@
 		var addEntryButton = document.getElementById('slink-add-entry');
 		if (addEntryButton) {
 			addEntryButton.addEventListener('click', function () {
-				addEntryRow(entriesBody, '', '');
+				addEntryRow(entriesBody, '', '', 0, false, 0);
 				var rows = entriesBody.querySelectorAll('.entry-name');
 				if (rows.length) {
 					rows[rows.length - 1].focus();

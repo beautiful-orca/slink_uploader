@@ -40,13 +40,16 @@ declare(strict_types=1);
 
 		<h3><?php p($l->t('Context menu entries')); ?></h3>
 		<p class="settings-hint">
-			<?php p($l->t('Each entry creates its own action in the files context menu. The URL parameters are appended to the share URL returned by Slink, e.g. "width=1200&format=jpeg". Without entries, a single "Upload to Slink" action without parameters is shown.')); ?>
+			<?php p($l->t('Each entry creates its own action in the files context menu. The URL parameters are appended to the share URL returned by Slink. "Max. width" limits the image width (in pixels, 0 = original size), "Convert to JPG" converts the image to JPEG with the given quality in percent (0 = default 85) before the upload — the original file in Nextcloud is never modified. Without entries, a single "Upload to Slink" action without parameters is shown.')); ?>
 		</p>
-		<table id="slink-entries-table" style="max-width: 640px;">
+		<table id="slink-entries-table" style="max-width: 800px;">
 			<thead>
 				<tr>
-					<th style="text-align: left;"><?php p($l->t('Displayed name')); ?></th>
-					<th style="text-align: left;"><?php p($l->t('URL parameters')); ?></th>
+					<th><?php p($l->t('Displayed name')); ?></th>
+					<th><?php p($l->t('URL parameters')); ?></th>
+					<th><?php p($l->t('Max. width (px)')); ?></th>
+					<th><?php p($l->t('Convert to JPG')); ?></th>
+					<th><?php p($l->t('JPG quality (%%)')); ?></th>
 					<th></th>
 				</tr>
 			</thead>
@@ -55,6 +58,9 @@ declare(strict_types=1);
 				<tr class="slink-entry-row">
 					<td><input type="text" class="entry-name" autocomplete="off" placeholder="<?php p($l->t('Title image')); ?>" value="<?php p($entry['name']); ?>" /></td>
 					<td><input type="text" class="entry-params" autocomplete="off" placeholder="width=1200&format=jpeg" value="<?php p($entry['params']); ?>" style="min-width: 220px;" /></td>
+					<td><input type="number" class="entry-max-width" autocomplete="off" min="0" max="20000" step="1" placeholder="0" value="<?php p((string)($entry['maxWidth'] ?? 0)); ?>" style="width: 110px;" /></td>
+					<td><input type="checkbox" class="entry-to-jpg"<?php if (($entry['toJpg'] ?? false)): ?> checked<?php endif; ?> title="<?php p($l->t('Converts the image to JPG before the upload')); ?>" /></td>
+					<td><input type="number" class="entry-jpg-quality" autocomplete="off" min="0" max="100" step="1" placeholder="85" value="<?php p(($entry['quality'] ?? 0) > 0 ? (string)($entry['quality'] ?? 0) : ''); ?>" style="width: 90px;" /></td>
 					<td><button type="button" class="slink-remove-entry button"><?php p($l->t('Remove')); ?></button></td>
 				</tr>
 				<?php endforeach; ?>

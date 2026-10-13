@@ -34,7 +34,14 @@ class SlinkService {
 	) {
 	}
 
-	public function upload(File $file): string {
+	/**
+	 * Upload the given file to Slink. $processed (from ImageService)
+	 * replaces the original file's contents, filename and mime type in
+	 * the upload if given; null uploads the original unchanged.
+	 *
+	 * @param null|array{data: string, filename: string, mimeType: string} $processed
+	 */
+	public function upload(File $file, ?array $processed = null): string {
 		$endpoint = $this->config->getAppValue(self::APP_ID, 'endpoint', '');
 		$token = self::normalizeToken($this->config->getAppValue(self::APP_ID, 'token', ''));
 		$field = $this->config->getAppValue(self::APP_ID, 'responseField', 'url');
@@ -59,13 +66,22 @@ class SlinkService {
 			$headers['Origin'] = $origin;
 		}
 
+		$filename = $file->getName();
+		$mimeType = $file->getMimeType();
+		$contents = $file->fopen('rb');
+		if (is_array($processed) && isset($processed['data'], $processed['filename'], $processed['mimeType'])) {
+			$filename = $processed['filename'];
+			$mimeType = $processed['mimeType'];
+			$contents = $processed['data'];
+		}
+
 		$multipart = [
 			[
 				'name' => $fileFormName,
-				'contents' => $file->fopen('rb'),
-				'filename' => $file->getName(),
+				'contents' => $contents,
+				'filename' => $filename,
 				'headers' => [
-					'Content-Type' => $file->getMimeType(),
+					'Content-Type' => $mimeType,
 				],
 			],
 		];

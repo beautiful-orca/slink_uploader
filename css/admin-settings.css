@@ -1,0 +1,26 @@
+/**
+ * Slink Uploader admin settings: horizontal/vertical breathing room
+ * for the context-menu entry table. Nextcloud's admin CSS collapses
+ * table cell spacing, which makes the columns touch each other.
+ */
+#slink-entries-table th,
+#slink-entries-table td {
+	padding: 4px 14px 4px 0;
+	vertical-align: middle;
+}
+
+#slink-entries-table th {
+	padding-bottom: 10px;
+	text-align: left;
+}
+
+/* "Convert to JPG" column: center the checkbox under its header */
+#slink-entries-table th:nth-child(4),
+#slink-entries-table td:nth-child(4) {
+	padding-right: 14px;
+	text-align: center;
+}
+
+#slink-entries-table .entry-name {
+	min-width: 180px;
+}
