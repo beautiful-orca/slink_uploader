@@ -2,9 +2,9 @@
 <info>
     <id>slink_uploader</id>
     <name>Slink Uploader</name>
-    <summary>Upload images to a Slink image host from the Files context menu</summary>
-    <description><![CDATA[Adds "Upload to Slink" actions to the file context menu for images. The selected image is sent to a configured Slink API endpoint on your own server. Before the upload, the image can be limited in width and converted to JPEG with configurable quality (per context-menu entry, using PHP GD); the original file in Nextcloud is never modified, and if processing fails the original is uploaded. The returned share URL is copied to the clipboard and stored as an updatable comment on the file (one comment per context-menu entry). Context-menu entries (display name, URL parameters appended to the share URL, width limit, JPEG conversion and quality) are configurable under Administration settings -> Slink Uploader.]]></description>
-    <version>0.3.1</version>
+    <summary>Upload images to a Slink image host from the Files context menu and Deck card attachments</summary>
+    <description><![CDATA[Adds "Upload to Slink" actions to the file context menu for images, and to image attachments in the Deck app's card sidebar. The selected image is sent to a configured Slink API endpoint on your own server. Before the upload, the image can be limited in width and converted to JPEG with configurable quality (per context-menu entry, using PHP GD); the original file in Nextcloud is never modified, and if processing fails the original is uploaded. The returned share URL is copied to the clipboard and stored as an updatable comment on the file (one comment per context-menu entry). Context-menu entries (display name, URL parameters appended to the share URL, width limit, JPEG conversion and quality) are configurable under Administration settings -> Slink Uploader. The Deck integration injects its action into the attachment rows of the card sidebar via the DOM (no Deck API exists); it only reads Deck's attachment data.]]></description>
+    <version>0.4.1</version>
     <licence>agpl</licence>
     <author>beautiful-orca</author>
     <namespace>SlinkUploader</namespace>

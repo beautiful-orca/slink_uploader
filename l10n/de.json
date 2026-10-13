@@ -43,5 +43,5 @@
 	"The image is already hosted on Slink (duplicate).": "Das Bild ist bereits auf Slink gehostet (Duplikat).",
 	"No previously stored Slink URL of this file is known, so the link cannot be reused here. Copy the URL of the existing image on Slink instead.": "Es ist keine zuvor gespeicherte Slink-URL dieser Datei bekannt, daher kann der Link hier nicht wiederverwendet werden. Kopieren Sie stattdessen die URL des vorhandenen Bildes auf Slink.",
 	"Slink URL of the already uploaded image (reused)": "Slink-URL des bereits hochgeladenen Bildes (wiederverwendet)",
-	"The name of the context-menu entry is required.": "Der Name des Kontextmenü-Eintrags ist erforderlich."
+	"Upload to Slink": "Zu Slink hochladen"
 }, "pluralForms": "nplurals=2; plural=(n != 1);" }

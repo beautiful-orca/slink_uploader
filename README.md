@@ -2,7 +2,8 @@
 
 A build-free Nextcloud app (NC 30–34) that adds **"Upload to Slink"**
 actions for image files to the context menu (three-dot menu) of the Files
-app. The image is uploaded to a self-hosted
+app, and the same configured context-menu entries to the three-dot menu of
+image attachments in the **Deck** app's card sidebar. The image is uploaded to a self-hosted
 [Slink](https://github.com/andrii-kryvoviaz/slink) image host; the returned
 share URL is copied to the clipboard and stored as a comment on the file.
 Multiple context-menu entries (e.g. different image sizes) are
@@ -178,6 +179,92 @@ Notes:
   page reload. If fetching fails, the app registers the default action
   after a short delay so uploads remain possible (without processing).
 
+## Deck app: attachments
+
+Image attachments of a Deck card get the same actions in the card sidebar:
+the three-dot menu of every attachment row of an image file contains one
+**"Upload to Slink" entry per configured context-menu entry** — exactly
+the entries configured under Administration settings → Slink Uploader
+(without configured entries: a single default "Upload to Slink" action).
+The entries appear next to the native menu items ("Show in Files",
+"Download", "Remove attachment"), look exactly like them and behave the
+same: a click uploads exactly this attachment through the normal Slink
+pipeline with the chosen entry's URL parameters and server-side
+processing — same endpoint, same toast with the Slink URL, URL in the
+clipboard, URL stored as a comment on the file.
+
+Rows without a native three-dot menu (read-only boards) fall back to a
+single icon button with the default action, so uploads stay possible.
+
+Deck offers no official frontend API for this, so the entries are
+injected into the rendered DOM (`js/slink_uploader-deck.js`, build-free
+like the Files integration):
+
+- The script is loaded via `BeforeTemplateRenderedEvent` +
+  `Util::addScript` when the user is logged in and the Deck app is
+  enabled. It stays idle until `window.OCA.Deck` appears (retry loop,
+  the Deck bundle loads later than the page itself) and gives up after
+  ~30s on non-Deck pages.
+- The configured context-menu entries are fetched from the server
+  (`GET /apps/slink_uploader/entries`, like the Files integration).
+- A `MutationObserver` watches the document: whenever the Vue-rendered
+  attachment list (re)appears — opening a card, switching cards, card
+  details in the sidebar or in the modal — the rows are re-analyzed.
+  A marker attribute prevents double injection into the same row.
+- The DOM rows carry no file ID. The attachments of the currently open
+  card are therefore loaded **read-only** through Deck's own endpoints
+  and each row is matched by its displayed file name. Deck versions
+  differ here (verified against Deck 1.17.6 and 1.18.5): 1.18+ exposes
+  an OCS route
+  (`GET /ocs/v2.php/apps/deck/api/v1.0/cards/<cardId>/attachments`,
+  `OCS-APIRequest` header, session auth), which is tried first; older
+  versions (and the fallback, since the route also still exists there)
+  use the plain app route
+  (`GET /apps/deck/cards/<cardId>/attachments`, plain JSON, same data),
+  which the Deck frontend itself uses in 1.17. A row only gets entries
+  when exactly one attachment of the card carries that name — ambiguous
+  rows and non-image attachments (MIME type is checked) get no entries.
+  Nothing is guessed, and nothing is written to Deck.
+- The current card ID comes from the URL of the Deck route
+  (`/apps/deck/board/<boardId>/card/<cardId>`).
+- The three-dot menu (NcActions from @nextcloud/vue) renders its
+  content only when opened, and the open menu may be rendered
+  teleported to `<body>`. The open menu of a row is therefore found
+  via the menu's `aria-labelledby` attribute (pointing to the trigger
+  inside the row), and the entries are injected whenever the menu
+  appears in the DOM. Each entry is a clone of a native menu entry of
+  the same menu: cloned elements carry the `data-v-*` attributes of
+  @nextcloud/vue's scoped styles, so they are styled exactly like the
+  native "Show in Files"/"Download" entries; the icon is the core
+  class `icon-upload` (the same icon Deck's "Upload new files" button
+  uses), and the text is the entry's configured name. A marker
+  attribute prevents double injection into the same open menu.
+- The click sends `{fileId, params, name}` of the chosen entry to the
+  existing upload endpoint (`POST /apps/slink_uploader/upload`); the
+  server applies the entry's processing options (looked up by name,
+  like in the Files app).
+
+**Debugging:** If no Slink entries appear in the three-dot menus, load
+Deck with `?slinkDebug=1` appended to the URL and watch the browser
+console (`[Slink Deck]` lines). The output shows whether the script
+loaded, whether `window.OCA.Deck` was found, which card ID was read
+from the URL, whether Deck's OCS attachment request succeeded
+(including the URL and HTTP status), how each row was resolved and
+whether entries were injected into which menu. No `[Slink Deck]` lines
+at all means the script did not load — check the network tab for
+`slink_uploader-deck.js`.
+
+**Deliberately fragile:** the selectors (card sidebar, attachment list,
+rows, name spans, menu trigger/menu markup) are derived from Deck's
+source — verified against Deck 1.17.6 (NC 33) and 1.18.5 (NC 34) — and
+are kept in one commented block at the top of
+`js/slink_uploader-deck.js`. Deck renders the sidebar with Vue; if a
+Deck or @nextcloud/vue update changes the markup or CSS classes, the
+injection silently stops working (the app keeps working in the Files
+app). **Check the selectors after Deck updates** and adjust them if
+necessary. The board view is not touched; only the card sidebar and the
+card modal are augmented, and Deck's own source is never modified.
+
 ## Installation
 
 **Instances with file access:** Copy the `slink_uploader/` folder into the
@@ -229,6 +316,10 @@ sudo docker exec --user www-data nextcloud-aio-nextcloud php occ slink_uploader:
   memory only; the processed copy is passed to the upload and then
   discarded. Without GD, or whenever processing fails, the original is
   uploaded (failsafe, logged in the Nextcloud log).
+- **Deck:** The attachment action is injected via DOM (`MutationObserver`)
+  because Deck has no frontend API for it — see "Deck app: attachments"
+  for details and for the update-fragility caveat. Only Deck's OCS API
+  is read; nothing is written to Deck.
 - **Comments:** Uses the Comments API (object type `files`); the marker
   prefix `Slink - ` enables the find-or-update behaviour, with one
   comment per context-menu entry.
@@ -247,7 +338,7 @@ slink_uploader/
 │   ├── info.xml                          # Metadata (NC 30–34), admin settings + occ command registration
 │   └── routes.php                        # POST /upload, GET /entries, POST /config
 ├── lib/
-│   ├── AppInfo/Application.php           # Loads js/slink_uploader-main.js as init script
+│   ├── AppInfo/Application.php           # Loads js/slink_uploader-main.js as init script; js/slink_uploader-deck.js via BeforeTemplateRenderedEvent (if Deck is enabled)
 │   ├── Command/CleanupComments.php       # occ slink_uploader:cleanup-comments [--dry-run]
 │   ├── Controller/UploadController.php   # Endpoint: load file → Slink → comment
 │   ├── Controller/ConfigController.php   # Admin-only: saves endpoint/token/response field/file form name/origin
@@ -263,7 +354,8 @@ slink_uploader/
 │   └── admin.php                         # Configuration form (vanilla PHP template)
 ├── js/
 │   ├── admin-settings.js                 # Admin form logic (fetch save, build-free; separate file due to CSP)
-│   └── slink_uploader-main.js            # File action registration (build-free)
+│   ├── slink_uploader-main.js            # File action registration (build-free)
+│   └── slink_uploader-deck.js             # Deck card sidebar: DOM injection of the configured context-menu entries into the attachment three-dot menus (build-free)
 ├── l10n/
 │   └── de.json                           # German UI translation
 └── README.md

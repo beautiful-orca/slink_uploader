@@ -48,7 +48,8 @@ class UploadController extends Controller {
 	/**
 	 * Upload the given file to Slink and store the returned URL as a comment.
 	 * $params contains the URL parameters and $name the display name of the
-	 * chosen context-menu entry (used to key the entry's line in the comment).
+	 * chosen context-menu entry (used to key the entry's line in the comment);
+	 * an empty $name defaults to "Upload to Slink".
 	 *
 	 * @NoAdminRequired
 	 * @param int $fileId
@@ -75,12 +76,12 @@ class UploadController extends Controller {
 			return new JSONResponse(['error' => 'notanimage', 'mime' => $mimeType], 400);
 		}
 
+		// An empty name (e.g. the Deck integration posts only the file ID)
+		// falls back to the default action name that the Files app also
+		// uses when no entries are configured.
 		$name = trim($name);
 		if ($name === '') {
-			return new JSONResponse([
-				'error' => 'invalidname',
-				'message' => $this->l10n->t('The name of the context-menu entry is required.'),
-			], 400);
+			$name = 'Upload to Slink';
 		}
 
 		// The entry's upload processing options (max width, JPEG
