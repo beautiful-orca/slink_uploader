@@ -24,6 +24,8 @@
 	"Slink upload failed": "Slink-Upload fehlgeschlagen",
 	"Slink URL copied to clipboard": "Slink-URL in die Zwischenablage kopiert",
 	"Slink URL (also saved as file comment)": "Slink-URL (auch als Datei-Kommentar gespeichert)",
+	"Copy": "Kopieren",
+	"Copied": "Kopiert",
 	"Could not save the file comment": "Datei-Kommentar konnte nicht gespeichert werden",
 	"The API endpoint is required.": "Der API-Endpoint ist erforderlich.",
 	"The API endpoint must be a full http(s) URL.": "Der API-Endpoint muss eine vollständige http(s)-URL sein.",

@@ -140,31 +140,69 @@
 		return (typeof t === 'function') ? t('slink_uploader', text) : text;
 	}
 
-	function showToast(message, isError, durationMs) {
-		var toast = document.createElement('div');
-		toast.textContent = message;
-		toast.setAttribute('role', 'status');
-		toast.style.cssText =
-			'position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);'
-			+ 'z-index: 9999; max-width: 90vw; overflow-wrap: anywhere;'
-			+ 'padding: 10px 16px; border-radius: 8px; font-size: 13px;'
-			+ 'background: var(--color-primary-element, #00639a);'
-			+ 'color: var(--color-primary-element-text, #ffffff);'
-			+ 'box-shadow: 0 4px 12px rgba(0,0,0,.25);';
-		if (isError) {
-			toast.style.background = 'var(--color-error, #e9322d)';
+	// Toast styled like Nextcloud's own toasts: colored through the
+	// server's design tokens (CSS variables), so it follows the theme
+	// (including dark mode) with readable dark-on-light text.
+	// (Same markup and styling as js/slink_uploader-main.js.)
+	var TOAST_STYLE = '.slink-toast{'
+		+ 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);'
+		+ 'z-index:10000;display:flex;align-items:center;max-width:90vw;'
+		+ 'padding:10px 12px;border-radius:var(--border-radius,8px);'
+		+ 'background:var(--color-main-background,#ffffff);'
+		+ 'color:var(--color-main-text,#222222);'
+		+ 'font-size:var(--default-font-size,13px);line-height:1.5;'
+		+ 'box-shadow:0 4px 12px var(--color-box-shadow,rgba(0,0,0,.25));'
+		+ 'animation:slink-toast-in .25s ease-out;}'
+		+ '.slink-toast--error{border-left:3px solid var(--color-error,#e9322d);}'
+		+ '.slink-toast__text{overflow-wrap:anywhere;}'
+		+ '.slink-toast .slink-toast__copy{flex:0 0 auto;margin:0 0 0 12px;'
+		+ 'padding:6px 14px;border:none;border-radius:var(--border-radius,8px);'
+		+ 'background:var(--color-primary-element,#00639a);'
+		+ 'color:var(--color-primary-element-text,#ffffff);'
+		+ 'font-size:var(--default-font-size,13px);white-space:nowrap;cursor:pointer;}'
+		+ '.slink-toast .slink-toast__copy:hover,'
+		+ '.slink-toast .slink-toast__copy:focus-visible{'
+		+ 'background:var(--color-primary-element-hover,#0074b2);}'
+		+ '.slink-toast .slink-toast__copy[disabled]{cursor:default;opacity:.65;'
+		+ 'background:var(--color-success,#46ba61);}'
+		+ '@keyframes slink-toast-in{'
+		+ 'from{opacity:0;transform:translate(-50%,8px);}'
+		+ 'to{opacity:1;transform:translate(-50%,0);}}';
+
+	function ensureToastStyle() {
+		if (document.getElementById('slink-toast-style')) {
+			return;
 		}
+		var style = document.createElement('style');
+		style.id = 'slink-toast-style';
+		style.textContent = TOAST_STYLE;
+		document.head.appendChild(style);
+	}
+
+	function showToast(message, isError, durationMs) {
+		ensureToastStyle();
+		var toast = document.createElement('div');
+		toast.className = 'slink-toast' + (isError ? ' slink-toast--error' : '');
+		toast.setAttribute('role', 'status');
+		var text = document.createElement('span');
+		text.className = 'slink-toast__text';
+		text.textContent = message;
+		toast.appendChild(text);
 		document.body.appendChild(toast);
 		window.setTimeout(function () {
 			if (toast.parentNode) {
 				toast.parentNode.removeChild(toast);
 			}
 		}, durationMs || 6000);
+		return toast;
 	}
 
-	// See js/slink_uploader-main.js for the rationale of the fallback:
-	// navigator.clipboard may reject after the async upload because the
-	// user activation has expired.
+	// Copy to clipboard. navigator.clipboard requires a secure context and
+	// may reject the write once the user activation of the click has
+	// expired, so fall back to the deprecated execCommand approach.
+	// Both only work from a user gesture — see reserveClipboard() for
+	// how the gesture is kept alive across the async upload.
+	// (Same rationale as js/slink_uploader-main.js.)
 	function copyToClipboard(text) {
 		if (navigator.clipboard && navigator.clipboard.writeText) {
 			return navigator.clipboard.writeText(text)
@@ -175,20 +213,112 @@
 	}
 
 	function legacyCopy(text) {
+		var area = document.createElement('textarea');
+		area.value = text;
+		area.setAttribute('readonly', '');
+		area.style.cssText = 'position: fixed; left: -9999px; top: 0; opacity: 0;';
+		document.body.appendChild(area);
 		try {
-			var area = document.createElement('textarea');
-			area.value = text;
-			area.setAttribute('readonly', '');
-			area.style.cssText = 'position: fixed; left: -9999px; top: 0; opacity: 0;';
-			document.body.appendChild(area);
 			area.focus();
 			area.select();
-			var ok = document.execCommand('copy');
-			document.body.removeChild(area);
-			return !!ok;
+			return !!document.execCommand('copy');
 		} catch (e) {
 			return false;
+		} finally {
+			document.body.removeChild(area);
 		}
+	}
+
+	/**
+	 * Browsers only allow clipboard writes from a transient user
+	 * activation (the click), which expires a few seconds after the
+	 * click, and only while the document is focused. The share URL is
+	 * only known after the upload, so a plain writeText() at that
+	 * point is rejected whenever the upload took too long — the copy
+	 * worked only for fast uploads, which is why it seemed random.
+	 *
+	 * Fix: reserve the clipboard synchronously at click time, while
+	 * the activation is fresh. clipboard.write() checks the user
+	 * activation when it is called, and its payload promise may
+	 * resolve much later — this keeps the click's gesture alive
+	 * across the upload. Supported by Chromium and Safari; optional
+	 * (callers fall back to a direct copy attempt).
+	 */
+	function reserveClipboard() {
+		var unsupported = { supported: false, resolve: function () {}, reject: function () {} };
+		if (typeof ClipboardItem === 'undefined'
+			|| !navigator.clipboard || typeof navigator.clipboard.write !== 'function') {
+			return unsupported;
+		}
+		var fulfill;
+		var cancel;
+		var payload = new Promise(function (resolve, reject) {
+			fulfill = resolve;
+			cancel = reject;
+		});
+		try {
+			var write = navigator.clipboard.write([
+				new ClipboardItem({ 'text/plain': payload })
+			]);
+			return {
+				supported: true,
+				// Deliver the URL to the reserved write (a Blob is the
+				// payload form both Chromium and Safari accept).
+				resolve: function (text) {
+					fulfill(new Blob([text], { type: 'text/plain' }));
+				},
+				// Upload failed: cancel the reserved write — nothing
+				// is copied.
+				reject: function () {
+					cancel(new Error('cancelled'));
+				},
+				// Resolves to true once the reserved write has been
+				// committed, false if it failed (caller falls back).
+				settled: write.then(function () { return true; }, function () { return false; })
+			};
+		} catch (e) {
+			return unsupported;
+		}
+	}
+
+	/**
+	 * Copy the share URL once the upload has finished: through the
+	 * clipboard reservation made at click time, falling back to a
+	 * direct copy attempt (which may be rejected because the user
+	 * activation has expired by then). Resolves to true when the URL
+	 * is on the clipboard.
+	 */
+	function copyAfterUpload(text, reservation) {
+		if (!reservation.supported) {
+			return copyToClipboard(text);
+		}
+		reservation.resolve(text);
+		return reservation.settled.then(function (copied) {
+			return copied ? true : copyToClipboard(text);
+		});
+	}
+
+	// The success toast always carries a Copy button. Usually the
+	// automatic copy has already succeeded and the button just
+	// allows re-copying the URL; when every automatic attempt was
+	// rejected, its click carries a fresh user activation, so the
+	// copy works in every browser.
+	function appendCopyButton(toast, text) {
+		var button = document.createElement('button');
+		button.type = 'button';
+		button.className = 'slink-toast__copy';
+		button.textContent = translate('Copy');
+		button.addEventListener('click', function (event) {
+			event.preventDefault();
+			event.stopPropagation();
+			copyToClipboard(text).then(function (copied) {
+				if (copied) {
+					button.textContent = translate('Copied');
+					button.disabled = true;
+				}
+			});
+		});
+		toast.appendChild(button);
 	}
 
 	function generateUrl(path) {
@@ -601,6 +731,10 @@
 		}
 		button.disabled = true;
 
+		// Reserve the clipboard synchronously, while the click's user
+		// activation is still fresh (see reserveClipboard).
+		var reservation = reserveClipboard();
+
 		var headers = {
 			'Content-Type': 'application/json',
 			'X-Requested-With': 'XMLHttpRequest',
@@ -621,12 +755,13 @@
 			});
 		}).then(function (result) {
 			if (!result.ok || !result.body || !result.body.url) {
+				reservation.reject();
 				var msg = (result.body && (result.body.message || result.body.error)) || 'Unknown error';
 				showToast(translate('Slink upload failed') + ': ' + msg, true, 9000);
 				return null;
 			}
 			var shareUrl = result.body.url;
-			return copyToClipboard(shareUrl).then(function (copied) {
+			return copyAfterUpload(shareUrl, reservation).then(function (copied) {
 				var lead;
 				if (result.body.duplicate) {
 					lead = translate('Slink URL of the already uploaded image (reused)');
@@ -639,10 +774,12 @@
 				if (result.body.comment === 'skipped') {
 					text += ' — ' + translate('Could not save the file comment');
 				}
-				showToast(text, false, copied ? 7000 : 15000);
+				var toast = showToast(text, false, copied ? 10000 : 15000);
+				appendCopyButton(toast, shareUrl);
 				return null;
 			});
 		}).catch(function () {
+			reservation.reject();
 			showToast(translate('Slink upload failed') + ': ' + translate('Request failed'), true, 9000);
 			return null;
 		}).then(function () {

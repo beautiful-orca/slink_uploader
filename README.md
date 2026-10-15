@@ -32,6 +32,17 @@ admin-configurable.
      own comment of the form `Slink - <entry name>: <URL>`. Re-uploading
      through an entry updates that entry's comment; the comments of other
      entries are left untouched.
+
+   Browsers only permit clipboard writes from a short-lived user
+   activation (the click) — by the time a slow upload finishes, that
+   activation has usually expired, which made the automatic copy
+   unreliable. The scripts therefore reserve the clipboard at click time
+   (`navigator.clipboard.write` with a promise payload that resolves when
+   the upload answers) and fall back to a direct copy attempt. The toast
+   itself is styled like Nextcloud's own toasts (server design tokens,
+   dark-on-light text) and always carries a **Copy button** next to the
+   URL; when the automatic copy was rejected, clicking it always works
+   (a fresh click carries a new user activation).
 4. Slink deduplicates images. When an unchanged image is re-uploaded (e.g.
    a second entry used on the same file), Slink rejects the upload with
    `DuplicateImageException` (HTTP 400) instead of returning the existing
